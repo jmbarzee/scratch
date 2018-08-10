@@ -11,8 +11,9 @@ import (
 	"unsafe"
 )
 
+const n = 10
+
 func main() {
-	const n = 10
 	t := int(unsafe.Sizeof(int64(0)) * n)
 
 	// Initialize mapped file
@@ -30,57 +31,26 @@ func main() {
 		panic(err)
 	}
 
-	// grab pointer for memory mapped file
-	fmt.Println("\n***** Mapping file to Pointer *****")
+	fmt.Println("\n***** Mapping file to Pointer (expect blanks) *****")
 	mmap, err := syscall.Mmap(int(map_file.Fd()), 0, int(t), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	if err != nil {
 		panic(err)
 	}
 	map_array := (*[n]int64)(unsafe.Pointer(&mmap[0]))
+	fmt.Printf("Pointer: %v\n", *map_array)
+	fmt.Printf("File:    %v\n", intsFromFile(map_file))
 
-	// read through pointer
-	fmt.Printf("%b\n", *map_array)
-
-	// read through file
-	_, err = map_file.Seek(0, io.SeekStart)
-	if err != nil {
-		panic(err)
-	}
-	b1, err := ioutil.ReadAll(map_file)
-	if err != nil {
-		panic(err)
-	}
-	i1 := make([]int64, n)
-	err = binary.Read(bytes.NewReader(b1), binary.LittleEndian, &i1)
-	fmt.Printf("%b\n", i1)
-
-	// write through pointer
-	fmt.Println("\n***** Writing through Pointer *****")
+	fmt.Println("\n***** Writing through Pointer (expect n*2) *****")
 	for i := int64(0); i < n; i++ {
-		map_array[i] = i * i
+		map_array[i] = i + i
 	}
+	fmt.Printf("Pointer: %v\n", *map_array)
+	fmt.Printf("File:    %v\n", intsFromFile(map_file))
 
-	// read through pointer
-	fmt.Printf("%b\n", *map_array)
-
-	// read through file
-	_, err = map_file.Seek(0, io.SeekStart)
-	if err != nil {
-		panic(err)
-	}
-	b2, err := ioutil.ReadAll(map_file)
-	if err != nil {
-		panic(err)
-	}
-	i2 := make([]int64, n)
-	err = binary.Read(bytes.NewReader(b2), binary.LittleEndian, &i2)
-	fmt.Printf("%b\n", i2)
-
-	// write through file
-	fmt.Println("\n***** Writing through File *****")
+	fmt.Println("\n***** Writing through File (expect n^2) *****")
 	other_array := make([]int64, n)
 	for i := int64(0); i < n; i++ {
-		other_array[i] = i + i
+		other_array[i] = i * i
 	}
 	_, err = map_file.Seek(0, io.SeekStart)
 	if err != nil {
@@ -94,22 +64,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	// read through pointer
-	fmt.Printf("%b\n", *map_array)
-
-	// read through file
-	_, err = map_file.Seek(0, io.SeekStart)
-	if err != nil {
-		panic(err)
-	}
-	b3, err := ioutil.ReadAll(map_file)
-	if err != nil {
-		panic(err)
-	}
-	i3 := make([]int64, n)
-	err = binary.Read(bytes.NewReader(b3), binary.LittleEndian, &i3)
-	fmt.Printf("%b\n", i3)
+	fmt.Printf("Pointer: %v\n", *map_array)
+	fmt.Printf("File:    %v\n", intsFromFile(map_file))
 
 	// unmap memory and close file
 	err = syscall.Munmap(mmap)
@@ -120,4 +76,21 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func intsFromFile(map_file *os.File) []int64 {
+	_, err := map_file.Seek(0, io.SeekStart)
+	if err != nil {
+		panic(err)
+	}
+	b, err := ioutil.ReadAll(map_file)
+	if err != nil {
+		panic(err)
+	}
+	ints := make([]int64, n)
+	err = binary.Read(bytes.NewReader(b), binary.LittleEndian, &ints)
+	if err != nil {
+		panic(err)
+	}
+	return ints
 }
